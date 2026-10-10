@@ -19,8 +19,8 @@ export function Header({ mode, email, onSignOut, onExitDemo, onResetDemo }: Head
       </a>
       {mode === 'demo' && (
         <div className="demo-banner" role="note">
-          <strong>Demo mode</strong> &middot; Synthetic sample data only. Nothing here was read by Amazon Textract or
-          suggested by Amazon Bedrock, and nothing leaves your browser.
+          <strong>Demo mode</strong> &middot; This app is under development. The data shown here is pre-loaded sample
+          data, and nothing leaves your browser.
         </div>
       )}
       <header className="topbar">
