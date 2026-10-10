@@ -43,8 +43,8 @@ const SAMPLES: SampleDefinition[] = [
     category: 'Meals',
     extraction: {
       merchant: field('Bluebird Café', 'BLUEBIRD CAFÉ', box(0.19, 0.072, 0.62, 0.052)),
-      date: field('2026-03-04', '03/04/26', box(0.21, 0.19, 0.19, 0.032), { ambiguous: true }),
-      total: field('20.12', '$20.12', box(0.71, 0.528, 0.2, 0.042), { demoUncertain: true }),
+      date: field('2026-03-04', '03/04/26', box(0.205, 0.19, 0.235, 0.034), { ambiguous: true }),
+      total: field('20.12', '$20.12', box(0.68, 0.528, 0.23, 0.042), { demoUncertain: true }),
       currency: field('USD', 'USD', null),
       lineItems: [line('Flat white', '4.50', 0.265), line('Avocado toast', '11.00', 0.309), line('Sparkling water', '3.00', 0.353)],
       warnings: [],
@@ -57,7 +57,7 @@ const SAMPLES: SampleDefinition[] = [
     imageUrl: '/demo/rail.svg',
     category: 'Travel',
     extraction: {
-      merchant: field('Northwind Rail', 'NORTHWIND RAIL', box(0.18, 0.075, 0.64, 0.06)),
+      merchant: field('Northwind Rail', 'NORTHWIND RAIL', box(0.16, 0.075, 0.68, 0.06)),
       date: field('2026-09-12', '12 Sep 2026', box(0.37, 0.172, 0.3, 0.036)),
       total: field('42.80', '£42.80', box(0.7, 0.372, 0.21, 0.046)),
       currency: field('GBP', 'GBP', null),
@@ -72,7 +72,7 @@ const SAMPLES: SampleDefinition[] = [
     imageUrl: '/demo/software.svg',
     category: 'Software',
     extraction: {
-      merchant: field('Pixel Forge', 'Pixel Forge', box(0.09, 0.073, 0.42, 0.06)),
+      merchant: field('Pixel Forge', 'Pixel Forge', box(0.125, 0.073, 0.45, 0.06)),
       date: field('2026-09-01', 'September 1, 2026', box(0.35, 0.208, 0.4, 0.034)),
       total: field('29.00', '29.00', box(0.74, 0.475, 0.17, 0.04)),
       currency: EMPTY(),
@@ -89,7 +89,7 @@ const SAMPLES: SampleDefinition[] = [
     extraction: {
       merchant: field('Paper & Co.', 'Paper & Co.', box(0.24, 0.07, 0.52, 0.056), { demoUncertain: true }),
       date: field('2026-09-18', '2026-09-18', box(0.24, 0.186, 0.27, 0.034)),
-      total: field('24.47', 'USD 24.47', box(0.66, 0.5, 0.25, 0.042)),
+      total: field('24.47', 'USD 24.47', box(0.6, 0.5, 0.31, 0.042)),
       currency: field('USD', 'USD', null),
       lineItems: [line('Printer paper A4', '17.98', 0.272, '2'), line('Gel pens (12)', '6.49', 0.316)],
       warnings: [],
