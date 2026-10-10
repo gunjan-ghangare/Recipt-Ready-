@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" font-family="'Helvetica Neue', Arial, sans-serif" fill="#1b2b44">
+  <!-- Synthetic demo receipt. Not a real business. -->
+  <rect width="400" height="700" fill="#f7faff"/>
+  <rect x="0" y="0" width="400" height="18" fill="#1b4f9c"/>
+  <text x="200" y="86" font-size="30" font-weight="bold" text-anchor="middle">NORTHWIND RAIL</text>
+  <text x="36" y="140" font-size="15" fill="#4a5a75">Travel date</text>
+  <text x="150" y="140" font-size="18">12 Sep 2026</text>
+  <line x1="32" y1="160" x2="368" y2="160" stroke="#c5d0e3"/>
+  <text x="36" y="189" font-size="17">Off-peak return, zones 1-4</text>
+  <text x="362" y="189" font-size="17" text-anchor="end">42.80</text>
+  <text x="36" y="216" font-size="13" fill="#4a5a75">Valid on any off-peak service</text>
+  <line x1="32" y1="246" x2="368" y2="246" stroke="#c5d0e3"/>
+  <text x="36" y="286" font-size="22" font-weight="bold">TOTAL PAID</text>
+  <text x="362" y="286" font-size="24" font-weight="bold" text-anchor="end">£42.80</text>
+  <text x="36" y="340" font-size="14" fill="#4a5a75">Paid by contactless card</text>
+  <text x="36" y="364" font-size="14" fill="#4a5a75">Ticket ref NWR-0042-ABCD</text>
+  <rect x="120" y="420" width="160" height="160" fill="none" stroke="#1b2b44" stroke-width="3"/>
+  <path d="M140 440h40v40h-40zM220 440h40v40h-40zM140 520h40v40h-40zM200 500h20v20h-20zM230 530h30v30h-30z" fill="#1b2b44"/>
+  <text x="200" y="660" font-size="11" text-anchor="middle" fill="#7a5bd6">SYNTHETIC DEMO RECEIPT</text>
+</svg>

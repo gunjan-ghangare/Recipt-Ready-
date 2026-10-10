@@ -1,0 +1,3 @@
+# Local tooling for validating the backend and template (not deployed).
+boto3
+cfn-lint

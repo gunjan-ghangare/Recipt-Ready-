@@ -1,0 +1,4 @@
+# Runtime dependencies for the Lambda functions.
+# The functions only use boto3/botocore, which the AWS Lambda python3.14 runtime provides.
+# To pin your own SDK version instead (AWS recommends this for production), add for example:
+# boto3==<version>

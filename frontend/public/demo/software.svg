@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" font-family="'Segoe UI', Arial, sans-serif" fill="#202330">
+  <!-- Synthetic demo invoice. Not a real business. -->
+  <rect width="400" height="700" fill="#ffffff"/>
+  <rect x="36" y="40" width="10" height="44" fill="#ff6a3d"/>
+  <text x="54" y="84" font-size="30" font-weight="bold">Pixel Forge</text>
+  <text x="362" y="66" font-size="16" text-anchor="end" fill="#6b7080">INVOICE</text>
+  <text x="362" y="86" font-size="13" text-anchor="end" fill="#6b7080">#PF-2026-0917</text>
+  <text x="36" y="164" font-size="15" fill="#6b7080">Invoice date</text>
+  <text x="140" y="164" font-size="17">September 1, 2026</text>
+  <text x="36" y="190" font-size="14" fill="#6b7080">Billed to: Your Studio</text>
+  <rect x="32" y="222" width="336" height="2" fill="#e3e5ec"/>
+  <text x="36" y="259" font-size="17">Pro plan (monthly)</text>
+  <text x="362" y="259" font-size="17" text-anchor="end">29.00</text>
+  <text x="36" y="282" font-size="13" fill="#6b7080">Sep 1 – Sep 30, 2026</text>
+  <rect x="32" y="310" width="336" height="2" fill="#e3e5ec"/>
+  <text x="36" y="355" font-size="20" font-weight="bold">Total</text>
+  <text x="362" y="355" font-size="22" font-weight="bold" text-anchor="end">29.00</text>
+  <text x="36" y="420" font-size="13" fill="#6b7080">Charged to card on file. No action needed.</text>
+  <text x="200" y="660" font-size="11" text-anchor="middle" fill="#7a5bd6">SYNTHETIC DEMO INVOICE</text>
+</svg>

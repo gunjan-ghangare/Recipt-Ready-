@@ -1,0 +1,400 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ReceiptReady - turns receipt photos into draft expenses for review and approval.
+  Cognito sign-in, HTTP API with JWT authorization, Python Lambda, private S3,
+  Amazon Textract AnalyzeExpense, Amazon Bedrock Converse, and DynamoDB.
+
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: us.amazon.nova-2-lite-v1:0
+    AllowedPattern: "^[a-z0-9][a-z0-9.\\-]*[a-z0-9](:[a-z0-9\\-]+)*$"
+    Description: >
+      Bedrock model ID or inference profile ID used to suggest categories (not an ARN).
+      The default is the US cross-Region profile for Amazon Nova 2 Lite.
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: http://localhost:5173
+    Description: Browser origins allowed to call the API and upload to S3 (no trailing slash).
+  CallbackUrls:
+    Type: CommaDelimitedList
+    Default: http://localhost:5173/
+    Description: Cognito sign-in redirect URLs for the web app.
+  LogoutUrls:
+    Type: CommaDelimitedList
+    Default: http://localhost:5173/
+    Description: Cognito sign-out redirect URLs for the web app.
+  CognitoDomainPrefix:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[a-z0-9](?:[a-z0-9\\-]{0,61}[a-z0-9])?$"
+    Description: >
+      Optional Cognito managed login domain prefix (lowercase, unique per Region).
+      Leave empty to use receiptready-<account id>.
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 180, 365]
+
+Conditions:
+  HasDomainPrefix: !Not [!Equals [!Ref CognitoDomainPrefix, ""]]
+
+Globals:
+  Function:
+    Runtime: python3.14
+    Architectures: [arm64]
+    CodeUri: backend/src/
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref ExpensesTable
+        BUCKET_NAME: !Ref ReceiptsBucket
+
+Resources:
+  # ------------------------------------------------------------------ storage
+  ReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [POST]
+            AllowedOrigins: !Ref AllowedOrigins
+            AllowedHeaders: ["*"]
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  ReceiptsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReceiptsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ReceiptsBucket.Arn
+              - !Sub "${ReceiptsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ExpensesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: expenseId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: expenseId
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  # ------------------------------------------------------------------ auth
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-users"
+      UserPoolTier: ESSENTIALS
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      UsernameConfiguration:
+        CaseSensitive: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate: [email]
+
+  ApiResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId: !Ref UserPool
+      Identifier: receiptready
+      Name: ReceiptReady API
+      Scopes:
+        - ScopeName: expenses
+          ScopeDescription: Read and manage your own expenses
+
+  WebClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: ApiResourceServer
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: receiptready-web
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, receiptready/expenses]
+      CallbackURLs: !Ref CallbackUrls
+      LogoutURLs: !Ref LogoutUrls
+      SupportedIdentityProviders: [COGNITO]
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH, ALLOW_USER_SRP_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 7
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !If [HasDomainPrefix, !Ref CognitoDomainPrefix, !Sub "receiptready-${AWS::AccountId}"]
+      ManagedLoginVersion: 2
+
+  WebClientLoginStyle:
+    Type: AWS::Cognito::ManagedLoginBranding
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref WebClient
+      UseCognitoProvidedValues: true
+
+  # ------------------------------------------------------------------ API
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            # Requiring the API scope means only Cognito access tokens (not ID tokens) are accepted.
+            AuthorizationScopes: [receiptready/expenses]
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+              audience:
+                - !Ref WebClient
+      CorsConfiguration:
+        AllowOrigins: !Ref AllowedOrigins
+        AllowHeaders: [authorization, content-type]
+        AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
+        MaxAge: 600
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 40
+        ThrottlingRateLimit: 20
+
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-api"
+      RetentionInDays: !Ref LogRetentionDays
+
+  WorkerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-worker"
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: ReceiptReady HTTP API (uploads, drafts, approvals)
+      Handler: receiptready.api.handler
+      MemorySize: 256
+      Timeout: 15
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: WARN
+        LogGroup: !Ref ApiFunctionLogGroup
+      Environment:
+        Variables:
+          WORKER_FUNCTION_NAME: !Ref WorkerFunction
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: ExpenseRecords
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+              Resource: !GetAtt ExpensesTable.Arn
+            - Sid: ReceiptObjects
+              Effect: Allow
+              # PutObject backs the presigned upload; GetObject backs presigned viewing and file checks.
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:DeleteObject
+              Resource: !Sub "${ReceiptsBucket.Arn}/receipts/*"
+            - Sid: StartProcessing
+              Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt WorkerFunction.Arn
+      Events:
+        CreateUpload:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /receipts
+            Method: POST
+        ProcessReceipt:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: "/receipts/{id}/process"
+            Method: POST
+        ListExpenses:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /expenses
+            Method: GET
+        GetExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: "/expenses/{id}"
+            Method: GET
+        UpdateExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: "/expenses/{id}"
+            Method: PATCH
+        ApproveExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: "/expenses/{id}/approve"
+            Method: POST
+        RejectExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: "/expenses/{id}/reject"
+            Method: POST
+        DeleteExpense:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: "/expenses/{id}"
+            Method: DELETE
+
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: ReceiptReady receipt processing (Textract + Bedrock)
+      Handler: receiptready.worker.handler
+      MemorySize: 512
+      Timeout: 90
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: WARN
+        LogGroup: !Ref WorkerFunctionLogGroup
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+      EventInvokeConfig:
+        # Failures are recorded on the expense so the user can retry; no silent re-runs.
+        MaximumRetryAttempts: 0
+        MaximumEventAgeInSeconds: 300
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: ExpenseRecords
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt ExpensesTable.Arn
+            - Sid: ReadReceiptsForTextract
+              Effect: Allow
+              # Textract reads the S3 object with the caller's permissions.
+              Action: s3:GetObject
+              Resource: !Sub "${ReceiptsBucket.Arn}/receipts/*"
+            - Sid: AnalyzeExpense
+              Effect: Allow
+              # Textract AnalyzeExpense does not support resource-level permissions.
+              Action: textract:AnalyzeExpense
+              Resource: "*"
+            - Sid: InvokeConfiguredModel
+              Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}"
+                - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}"
+            - Sid: InvokeModelThroughConfiguredProfileOnly
+              Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                - !Sub "arn:${AWS::Partition}:bedrock:::foundation-model/*"
+              Condition:
+                StringEquals:
+                  bedrock:InferenceProfileArn: !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}"
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the HTTP API (VITE_API_URL)
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  CognitoDomainUrl:
+    Description: Cognito managed login domain (VITE_COGNITO_DOMAIN)
+    Value: !Sub "https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
+  UserPoolId:
+    Description: Cognito user pool ID
+    Value: !Ref UserPool
+  WebClientId:
+    Description: Cognito app client ID (VITE_COGNITO_CLIENT_ID)
+    Value: !Ref WebClient
+  ReceiptsBucketName:
+    Description: Private bucket holding receipt files
+    Value: !Ref ReceiptsBucket
+  ExpensesTableName:
+    Description: DynamoDB table holding drafts and approved expenses
+    Value: !Ref ExpensesTable
+  BedrockModelId:
+    Description: Model used for category suggestions
+    Value: !Ref BedrockModelId
